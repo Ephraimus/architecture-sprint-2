@@ -1,0 +1,133 @@
+version: '3.8'
+name: mongo-sharding-repl
+
+
+services:
+  base_mongo: &base_mongo
+    image: mongo
+
+    healthcheck:
+      test: [ "CMD","mongo","--eval","db.adminCommand('ping')" ]
+      interval: 1s
+      start_period: 15s
+
+  # Конфигурационный сервер
+  configsvr:
+    <<: *base_mongo
+    container_name: configsvr
+    command: ["mongod", "--configsvr", "--replSet", "configReplSet", "--port", "27017", "--bind_ip_all"]
+    volumes:
+      - configsvr_data:/data/db
+    ports:
+      - 27017:27017
+    depends_on:
+      - shard1-1
+      - shard1-2
+      - shard1-3
+      - shard2-1
+      - shard2-2
+      - shard2-3
+
+  # Роутер
+  mongos:
+    <<: *base_mongo
+    container_name: mongos
+    command: >
+      mongos --configdb configReplSet/configsvr:27017 --bind_ip_all --port 27020
+    depends_on:
+      - configsvr
+      - shard1-1
+      - shard1-2
+      - shard1-3
+      - shard2-1
+      - shard2-2
+      - shard2-3
+    ports:
+      - 27020:27020
+
+
+
+
+  shard1-1:
+    <<: *base_mongo
+    container_name: shard1-1
+    command: ["mongod", "--shardsvr", "--replSet", "shard1ReplSet", "--port", "27018", "--bind_ip_all"]
+    volumes:
+      - shard1_1_data:/data/db
+    ports:
+      - 27018:27018
+
+  shard1-2:
+    <<: *base_mongo
+    container_name: shard1-2
+    command: ["mongod", "--shardsvr", "--replSet", "shard1ReplSet", "--port", "27028", "--bind_ip_all"]
+    volumes:
+      - shard1_2_data:/data/db
+    ports:
+      - 27028:27028
+
+  shard1-3:
+    <<: *base_mongo
+    container_name: shard1-3
+    command: [ "mongod", "--shardsvr", "--replSet", "shard1ReplSet", "--port", "27038", "--bind_ip_all" ]
+    volumes:
+      - shard1_3_data:/data/db
+    ports:
+      - 27038:27038
+
+
+
+  shard2-1:
+    <<: *base_mongo
+    container_name: shard2-1
+    command: ["mongod", "--shardsvr", "--replSet", "shard2ReplSet", "--port", "27019", "--bind_ip_all"]
+    volumes:
+      - shard2_1_data:/data/db
+    ports:
+      - 27019:27019
+
+  shard2-2:
+    <<: *base_mongo
+    container_name: shard2-2
+    command: ["mongod", "--shardsvr", "--replSet", "shard2ReplSet", "--port", "27029", "--bind_ip_all"]
+    volumes:
+      - shard2_2_data:/data/db
+    ports:
+      - 27029:27029
+
+  shard2-3:
+    <<: *base_mongo
+    container_name: shard2-3
+    command: [ "mongod", "--shardsvr", "--replSet", "shard2ReplSet", "--port", "27039", "--bind_ip_all" ]
+    volumes:
+      - shard2_3_data:/data/db
+    ports:
+      - 27039:27039
+
+
+
+
+  # Ваш pymongo_api
+  pymongo_api:
+    container_name: pymongo_api
+    build: 
+      context: api_app
+      dockerfile: Dockerfile
+    image: kazhem/pymongo_api:1.0.0
+    depends_on:
+      - mongos
+      - configsvr
+    ports:
+      - 8080:8080
+    environment:
+      MONGODB_URL: "mongodb://mongos:27020"
+      MONGODB_DATABASE_NAME: "somedb"
+
+volumes:
+  configsvr_data:
+  shard1_1_data:
+  shard1_2_data:
+  shard1_3_data:
+  shard2_1_data:
+  shard2_2_data:
+  shard2_3_data:
